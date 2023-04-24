@@ -3,60 +3,6 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-DOCUMENTATION = r'''
----
-module: file_content
-short_description: Module create or read file content.
-version_added: "1.0.0"
-description: This module create file with delivered content or read content from existed file on host.
-options:
-    path:
-        description: path to file
-        required: true
-        type: str
-    content:
-        description: content of the file
-        required: false
-        type: str
-        default: ''
-module return operation status - one of the following:
-    - created: the file was created and content were saved to file
-    - modified: the file existed and its contents overwritten (content option is not empty)
-    - readed: the file existed and its content read (content option is omitted)
-    - resisted: the file existed and its contents are equal to transferred
-    - denied: module could not access the file - error
-extends_documentation_fragment:
-    - test.utils.file_content
-'''
-
-EXAMPLES = r'''
-- name: Create file with content
-  test.utils.file_content:
-    path: test_dir/test_file
-    content: "simple line"
-- name: Read file content
- test.utils.file_content:
-    path: test_dir/test_file
-'''
-
-RETURN = r'''
-path:
-    description: Path to the file which module was applied.
-    type: str
-    returned: always
-    sample: 'test_dir/test_file'
-content:
-    description: File contant.
-    type: str
-    returned: always
-    sample: 'test'
-status:
-    description: state of file - created, modified, readed, resisted, denied
-    type: str
-    returned: always
-    sample: 'created'
-'''
-
 from ansible.module_utils.basic import AnsibleModule
 import os
 
