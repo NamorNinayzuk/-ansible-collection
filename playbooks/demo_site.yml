@@ -1,0 +1,132 @@
+---
+- name: Create infrastructure
+  gather_facts: false
+  hosts: localhost
+  become: false
+  tasks:
+    - name: Create net and subnet
+      artem_shtepa.utils.yc_vpc:
+        net: my_net
+        subnet: my_subnet
+        state: exists
+    - name: Create cloud instances
+      artem_shtepa.utils.yc_cmp:
+        machine: "{{ item.name }}"
+        state: exists
+        config:
+          core-fraction: 5
+          cores: "{{ item.cpu }}"
+          memory: "{{ item.memory }}"
+          create-boot-disk:
+            size: "{{ item.disk }}"
+            image-folder-id: standard-images
+            image-family: centos-7
+          public-ip: true
+          ssh-key: "~/.ssh/id_ed25519.pub"
+      register: yc_res
+      loop:
+        - { name: "clickhouse", cpu: 2, memory: "2GB", disk: "10GB" }
+        - { name: "lighthouse", cpu: 2, memory: "1GB", disk: "10GB" }
+        - { name: "vector", cpu: 2, memory: "1GB", disk: "10GB" }
+    - name: Add instances IP to hosts
+      ansible.builtin.add_host:
+        name: "{{ item.ip }}"
+        group: "{{ item.item.name }}"
+        ansible_ssh_user: yc-user
+      changed_when: false
+      loop: "{{ yc_res.results }}"
+
+- name: Wait for instance ready
+  gather_facts: false
+  hosts: all
+  tasks:
+    - name: Ping SSH port
+      ansible.builtin.wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 22
+        delay: 10
+        timeout: 300
+      delegate_to: localhost
+
+- name: Approve SSH fingerprint
+  gather_facts: false
+  hosts: all
+  tasks:
+    - name: Check known_hosts for
+      ansible.builtin.command: ssh-keygen -F {{ inventory_hostname }}
+      register: check_entry_in_known_hosts
+      failed_when: false
+      changed_when: false
+      ignore_errors: true
+      delegate_to: localhost
+    - name: Skip question for adding host key
+      ansible.builtin.set_fact:
+        # StrictHostKeyChecking can be "accept-new"
+        ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+      when: check_entry_in_known_hosts.rc == 1
+    - name: Add SSH fingerprint to known host
+      ansible.builtin.setup:
+      when: check_entry_in_known_hosts.rc == 1
+
+- name: Install Clickhouse
+  hosts: clickhouse
+  vars:
+    clickhouse_version: "22.3.3.44"
+    clickhouse_listen_host:
+      - "::"
+    clickhouse_dbs_custom:
+      - { name: "logs" }
+    clickhouse_profiles_default:
+      default:
+        date_time_input_format: best_effort
+    clickhouse_users_custom:
+      - { name: "logger",
+          password: "logger",
+          profile: "default",
+          quota: "default",
+          networks: { '::/0' },
+          dbs: ["logs"],
+          access_management: 0 }
+    file_log_structure: "file String, host String, message String, timestamp DateTime64"
+  roles:
+    - clickhouse
+  post_tasks:
+    - name: Create tables
+      ansible.builtin.command: "clickhouse-client --host 127.0.0.1 -q 'CREATE TABLE logs.file_log ({{ file_log_structure }}) ENGINE = Log();'"
+      register: create_tbl
+      failed_when: create_tbl.rc != 0 and create_tbl.rc != 57
+      changed_when: create_tbl.rc == 0
+
+- name: Install Vector
+  hosts: vector
+  vars:
+    vector_test_dir: "/home/{{ ansible_ssh_user }}/test"
+    clickhouse_host: "{{ groups['clickhouse'][0] }}"
+    clickhouse_user: "user"
+    clickhouse_password: "userlog"
+  roles:
+    - vector-role
+
+- name: Install Lighthouse
+  hosts: lighthouse
+  vars:
+    lighthouse_path: "/usr/share/nginx/lighthouse"
+    clickhouse_host: "{{ groups['clickhouse'][0] }}"
+    clickhouse_user: "user"
+    clickhouse_password: "userlog"
+  roles:
+    - lighthouse-role
+
+- name: Echo instances hint
+  hosts: localhost
+  tasks:
+    - name: Clickhouse IP
+      ansible.builtin.debug:
+        msg: "Clickhouse IP: {{ groups['clickhouse'][0] }}"
+    - name: Vector IP
+      ansible.builtin.debug:
+        msg: "Vector IP    : {{ groups['vector'][0] }}"
+    - name: Lighthouse IP
+      ansible.builtin.debug:
+        msg: "Lighthouse IP: {{ groups['lighthouse'][0] }}"
+...
