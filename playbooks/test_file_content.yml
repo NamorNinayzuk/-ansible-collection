@@ -1,0 +1,5 @@
+---
+- name: Test file content role
+  hosts: localhost
+  roles:
+    - test.utils.file_content
