@@ -3,3 +3,4 @@
   hosts: localhost
   roles:
     - test.utils.file_content
+---
