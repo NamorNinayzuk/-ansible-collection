@@ -1,0 +1,38 @@
+---
+- name: Destroy infrastructure
+  gather_facts: false
+  hosts: localhost
+  become: false
+  tasks:
+    - name: Destroy cloud instances
+      artem_shtepa.utils.yc_cmp:
+        machine: "{{ item }}"
+        state: absent
+      register: res
+      loop:
+        - clickhouse
+        - lighthouse
+        - vector
+    - name: Add instances IP to hosts
+      ansible.builtin.add_host:
+        name: "{{ item.ip }}"
+        group: "{{ item.item }}"
+      changed_when: false
+      when: '"ip" in item'
+      loop: "{{ res.results }}"
+    - name: Destroy net and subnet
+      artem_shtepa.utils.yc_vpc:
+        net: my_net
+        subnet: my_subnet
+        state: absent
+- name: Remove SSH fingerprint
+  gather_facts: false
+  hosts: all
+  tasks:
+    - name: Remove hostnames
+      ansible.builtin.command: ssh-keygen -R {{ inventory_hostname }}
+      register: res
+      failed_when: res.rc != 0
+      changed_when: false
+      delegate_to: localhost
+...
