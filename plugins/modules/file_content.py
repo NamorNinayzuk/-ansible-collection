@@ -26,18 +26,16 @@ module return operation status - one of the following:
     - resisted: the file existed and its contents are equal to transferred
     - denied: module could not access the file - error
 extends_documentation_fragment:
-    - artem_shtepa.utils.file_content
-author:
-    - Artem Shtepa
+    - test.utils.file_content
 '''
 
 EXAMPLES = r'''
 - name: Create file with content
-  artem_shtepa.utils.file_content:
+  test.utils.file_content:
     path: test_dir/test_file
     content: "simple line"
 - name: Read file content
-  artem_shtepa.utils.file_content:
+ test.utils.file_content:
     path: test_dir/test_file
 '''
 
@@ -63,17 +61,11 @@ from ansible.module_utils.basic import AnsibleModule
 import os
 
 def run_module():
-    # define available arguments/parameters a user can pass to the module
+
     module_args = dict(
         path=dict(type='str', required=True),
         content=dict(type='str', required=False, default='')
     )
-
-    # seed the result dict in the object
-    # we primarily care about changed and state
-    # changed is if this module effectively modified the target
-    # state will include any data that you want your module to pass back
-    # for consumption, for example, in a subsequent task
     result = dict(
         changed=False,
         path='',
@@ -81,10 +73,6 @@ def run_module():
         status='denied'
     )
 
-    # the AnsibleModule object will be our abstraction working with Ansible
-    # this includes instantiation, a couple of common attr would be the
-    # args/params passed to the execution, as well as if the module
-    # supports check mode
     module = AnsibleModule(
         argument_spec=module_args,
         supports_check_mode=True
@@ -124,14 +112,11 @@ def run_module():
             except:
                 result['status'] = 'denied'
                 module.fail_json(msg='Can`t write to file. Check file path and access rights.', **result)
-
-    # successful module execution
     module.exit_json(**result)
 
 
 def main():
     run_module()
-
 
 if __name__ == '__main__':
     main()
